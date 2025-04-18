@@ -29,5 +29,4 @@ const connectDB = async () => {
 
 connectDB();
 
-// Export for Vercel serverless
 export default app;
