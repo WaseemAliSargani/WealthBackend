@@ -8,8 +8,8 @@ const userSchema = new mongoose.Schema({
   lastTaskDate: { type: Date },
   completedTasks: [{ plan: String, amount: Number, date: Date }],
   todayEarning: { amount: Number, date: String },
-  invitationCode: { type: String, unique: true },
-  referredBy: { type: String, default: null },
+  invitationCode: { type: String, unique: true }, // Unique referral code
+  referredBy: { type: String, default: null } // Referrer's email
 });
 
 export default mongoose.model("User", userSchema);

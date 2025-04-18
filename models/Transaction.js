@@ -1,3 +1,4 @@
+// Backend/models/Transaction.js
 import mongoose from "mongoose";
 
 const TransactionSchema = new mongoose.Schema({
@@ -5,9 +6,9 @@ const TransactionSchema = new mongoose.Schema({
   amount: { type: Number, required: true, min: 0 },
   type: { type: String, enum: ["deposit", "withdraw", "task"], required: true },
   status: { type: String, enum: ["pending", "approved", "rejected"], default: "pending" },
-  txid: { type: String },
-  address: { type: String },
-  planName: { type: String, enum: ["Silver", "Golden", "Diamond", null], default: null },
+  txid: { type: String }, // For deposits
+  address: { type: String }, // For withdrawals
+  planName: { type: String, enum: ["Silver", "Golden", "Diamond", null], default: null }, // New field
   createdAt: { type: Date, default: Date.now },
 });
 

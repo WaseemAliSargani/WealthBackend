@@ -1,10 +1,9 @@
 import express from "express";
 import User from "../models/User.js";
-import validator from "validator";
 
 const router = express.Router();
 
-// Generate a unique alphanumeric invitation code
+// Generate a unique alphanumeric invitation code (e.g., INVL8C6ZERP)
 const generateInvitationCode = () => {
   const chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
   let code = "INV";
@@ -14,20 +13,13 @@ const generateInvitationCode = () => {
   return code;
 };
 
-// Authentication middleware (non-JWT)
 const authMiddleware = async (req, res, next) => {
+  console.log("Auth middleware - Headers:", req.headers);
   const { email, password } = req.headers;
-  if (!email || !password) {
-    return res.status(401).json({ message: "Email and password required" });
-  }
-  if (!validator.isEmail(email) && !validator.isMobilePhone(email)) {
-    return res.status(400).json({ message: "Invalid email or phone format" });
-  }
+  if (!email || !password) return res.status(401).json({ message: "Email and password required" });
   try {
     const user = await User.findOne({ email });
-    if (!user) {
-      return res.status(401).json({ message: "User not found" });
-    }
+    if (!user) return res.status(401).json({ message: "User not found" });
     const bcrypt = (await import("bcryptjs")).default;
     if (!(await bcrypt.compare(password, user.password))) {
       return res.status(401).json({ message: "Invalid password" });
@@ -35,43 +27,30 @@ const authMiddleware = async (req, res, next) => {
     req.userId = user._id.toString();
     next();
   } catch (error) {
-    console.error("Auth error:", error);
+    console.error("Auth error:", error.stack);
     res.status(500).json({ message: "Server error", error: error.message });
   }
 };
 
-// Get user details
 router.get("/me", authMiddleware, async (req, res) => {
   try {
-    const user = await User.findById(req.userId).select(
-      "email balance plan lastTaskDate completedTasks todayEarning invitationCode"
-    );
-    if (!user) {
-      return res.status(404).json({ message: "User not found" });
-    }
+    const user = await User.findById(req.userId).select("email balance plan lastTaskDate completedTasks todayEarning invitationCode");
+    if (!user) return res.status(404).json({ message: "User not found" });
+    console.log("Returning user data:", user);
     res.json(user);
   } catch (error) {
-    console.error("Get user error:", error);
+    console.error("Get user error:", error.stack);
     res.status(500).json({ message: "Server error", error: error.message });
   }
 });
 
-// Signup
 router.post("/signup", async (req, res) => {
   const { email, password, ref } = req.body;
-  if (!email || !password) {
-    return res.status(400).json({ message: "Email and password required" });
-  }
-  if (!validator.isEmail(email) && !validator.isMobilePhone(email)) {
-    return res.status(400).json({ message: "Invalid email or phone format" });
-  }
-  if (!validator.isLength(password, { min: 6 })) {
-    return res.status(400).json({ message: "Password must be at least 6 characters" });
-  }
   try {
     const bcrypt = (await import("bcryptjs")).default;
     const hashedPassword = await bcrypt.hash(password, 10);
 
+    // Handle referral
     let referredBy = null;
     if (ref) {
       const referrer = await User.findOne({ invitationCode: ref });
@@ -79,9 +58,11 @@ router.post("/signup", async (req, res) => {
         referredBy = referrer.email;
         referrer.balance = (referrer.balance || 0) + 5;
         await referrer.save();
+        console.log(`Bonus awarded to ${referrer.email} for inviting ${email}`);
       }
     }
 
+    // Generate unique invitationCode
     let invitationCode;
     let isUnique = false;
     while (!isUnique) {
@@ -102,53 +83,31 @@ router.post("/signup", async (req, res) => {
     res.json({ message: "User created", email, invitationCode });
   } catch (error) {
     console.error("Signup error:", error);
-    if (error.code === 11000) {
-      return res.status(400).json({ message: "Email already exists" });
-    }
     res.status(500).json({ message: "Server error", error: error.message });
   }
 });
 
-// Login
 router.post("/login", async (req, res) => {
   const { email, password } = req.body;
-  if (!email || !password) {
-    return res.status(400).json({ message: "Email and password required" });
-  }
-  if (!validator.isEmail(email) && !validator.isMobilePhone(email)) {
-    return res.status(400).json({ message: "Invalid email or phone format" });
-  }
   try {
     const user = await User.findOne({ email });
-    if (!user) {
-      return res.status(401).json({ message: "User not found" });
-    }
+    if (!user) return res.status(401).json({ message: "User not found" });
     const bcrypt = (await import("bcryptjs")).default;
     if (!(await bcrypt.compare(password, user.password))) {
       return res.status(401).json({ message: "Invalid password" });
     }
-    res.json({
-      email: user.email,
-      plan: user.plan,
-      balance: user.balance,
-      invitationCode: user.invitationCode,
-    });
+    res.json({ email: user.email, plan: user.plan, balance: user.balance, invitationCode: user.invitationCode });
   } catch (error) {
     console.error("Login error:", error);
     res.status(500).json({ message: "Server error", error: error.message });
   }
 });
 
-// Complete task
 router.post("/task", authMiddleware, async (req, res) => {
   try {
     const user = await User.findById(req.userId);
-    if (!user) {
-      return res.status(404).json({ message: "User not found" });
-    }
-    if (!user.plan) {
-      return res.status(400).json({ message: "No plan activated" });
-    }
+    if (!user) return res.status(404).json({ message: "User not found" });
+    if (!user.plan) return res.status(400).json({ message: "No plan activated" });
 
     const today = new Date().toDateString();
     if (user.lastTaskDate && new Date(user.lastTaskDate).toDateString() === today) {
@@ -156,9 +115,7 @@ router.post("/task", authMiddleware, async (req, res) => {
     }
 
     const earnings = { Silver: 1, Golden: 2, Diamond: 3.5 }[user.plan];
-    if (!earnings) {
-      return res.status(400).json({ message: "Invalid plan" });
-    }
+    if (!earnings) return res.status(400).json({ message: "Invalid plan" });
 
     user.balance = (user.balance || 0) + earnings;
     user.lastTaskDate = new Date();
@@ -167,15 +124,11 @@ router.post("/task", authMiddleware, async (req, res) => {
     user.todayEarning = { amount: earnings, date: today };
     await user.save();
 
-    res.json({
-      balance: user.balance,
-      plan: user.plan,
-      todayEarning: user.todayEarning,
-      completedTasks: user.completedTasks,
-    });
+    console.log("Task completed for user:", user.email, "Earnings:", earnings);
+    res.json({ balance: user.balance, plan: user.plan, todayEarning: user.todayEarning, completedTasks: user.completedTasks });
   } catch (error) {
-    console.error("Task error:", error);
-    res.status(500).json({ message: "Server error", error: error.message });
+    console.error("Task error:", error.stack);
+    res.status(500).json({ message: "Server error in task", error: error.message });
   }
 });
 
