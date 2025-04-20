@@ -109,19 +109,20 @@ router.post("/task", authMiddleware, async (req, res) => {
     if (!user) return res.status(404).json({ message: "User not found" });
     if (!user.plan) return res.status(400).json({ message: "No plan activated" });
 
-    const today = new Date().toDateString();
-    if (user.lastTaskDate && new Date(user.lastTaskDate).toDateString() === today) {
-      return res.status(400).json({ message: "Task already completed today" });
+    const now = new Date();
+    const twentyFourHours = 24 * 60 * 60 * 1000; // 24 hours in milliseconds
+    if (user.lastTaskDate && (now - new Date(user.lastTaskDate)) < twentyFourHours) {
+      return res.status(400).json({ message: "Task already completed. Wait until the 24-hour period ends." });
     }
 
     const earnings = { Silver: 1, Golden: 2, Diamond: 3.5 }[user.plan];
     if (!earnings) return res.status(400).json({ message: "Invalid plan" });
 
     user.balance = (user.balance || 0) + earnings;
-    user.lastTaskDate = new Date();
+    user.lastTaskDate = now;
     user.completedTasks = user.completedTasks || [];
-    user.completedTasks.push({ plan: user.plan, amount: earnings, date: new Date() });
-    user.todayEarning = { amount: earnings, date: today };
+    user.completedTasks.push({ plan: user.plan, amount: earnings, date: now });
+    user.todayEarning = { amount: earnings, date: now.toDateString() };
     await user.save();
 
     console.log("Task completed for user:", user.email, "Earnings:", earnings);
