@@ -56,7 +56,6 @@ router.post("/signup", async (req, res) => {
       const referrer = await User.findOne({ invitationCode: ref });
       if (referrer) {
         referredBy = referrer.email;
-        referrer.balance = (referrer.balance || 0) + 5;
         await referrer.save();
         console.log(`Bonus awarded to ${referrer.email} for inviting ${email}`);
       }
