@@ -1,3 +1,4 @@
+// Backend/routes/transactionRoutes.js
 import express from "express";
 import Transaction from "../models/Transaction.js";
 import User from "../models/User.js";
@@ -48,7 +49,7 @@ router.post("/deposit", authMiddleware, async (req, res) => {
       type: "deposit",
       status: "pending",
       txid,
-      planName,
+      planName, // Save planName
     });
     await transaction.save();
     res.json({ message: "Deposit recorded, awaiting approval", transaction });
@@ -123,7 +124,7 @@ router.get("/", authMiddleware, async (req, res) => {
   }
 });
 
-// Update Transaction Status (Admin or Manual Update)
+// New Route: Update Transaction Status (Admin or Manual Update)
 router.patch("/update-status/:transactionId", async (req, res) => {
   const { transactionId } = req.params;
   const { status } = req.body;
@@ -136,29 +137,20 @@ router.patch("/update-status/:transactionId", async (req, res) => {
     if (!transaction) {
       return res.status(404).json({ message: "Transaction not found" });
     }
-    const user = await User.findById(transaction.userId);
-    if (!user) {
-      return res.status(404).json({ message: "User not found" });
-    }
-
     transaction.status = status;
-
-    if (status === "approved") {
-      if (transaction.type === "deposit" && transaction.planName) {
-        user.plan = transaction.planName; // Activate the plan
-        user.balance = (user.balance || 0) + transaction.amount; // Add deposit to balance
-        console.log(`Plan ${transaction.planName} activated for user ${user.email}`);
-      } else if (transaction.type === "withdraw") {
-        if (user.balance < transaction.amount) {
-          return res.status(400).json({ message: "Insufficient balance for withdrawal approval" });
-        }
-        user.balance = (user.balance || 0) - transaction.amount; // Deduct withdrawal from balance
-        console.log(`Withdrawal of ${transaction.amount} approved for user ${user.email}`);
-      }
-    }
-
     await transaction.save();
-    await user.save();
+
+    // If status is approved and transaction is a deposit with planName, activate the plan
+    if (status === "approved" && transaction.type === "deposit" && transaction.planName) {
+      const user = await User.findById(transaction.userId);
+      if (!user) {
+        return res.status(404).json({ message: "User not found" });
+      }
+      user.plan = transaction.planName; // Activate the plan (Silver, Golden, Diamond)
+      user.balance = (user.balance || 0) + transaction.amount; // Update balance
+      await user.save();
+      console.log(`Plan ${transaction.planName} activated for user ${user.email}`);
+    }
 
     res.json({ message: "Transaction status updated", transaction });
   } catch (error) {
