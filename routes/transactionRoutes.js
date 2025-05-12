@@ -82,8 +82,8 @@ router.post("/withdraw", authMiddleware, async (req, res) => {
     }
 
     // Check withdrawal limits
-    if (withdrawalAmount < 30 || withdrawalAmount > 10000) {
-      return res.status(400).json({ message: "Withdrawal amount must be between 30 and 10,000 USDT" });
+    if (withdrawalAmount < 25 || withdrawalAmount > 10000) {
+      return res.status(400).json({ message: "Withdrawal amount must be between 25 and 10,000 USDT" });
     }
 
     // Check balance
